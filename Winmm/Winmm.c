@@ -19,9 +19,13 @@
 
 #include "stdafx.h"
 #include "player.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAGIC_DEVICEID 0xBEEF
 #define MAX_TRACKS 99
+#pragma warning(disable:4996)
 
 #ifdef WIN32
 
@@ -63,6 +67,35 @@ int time_format = MCI_FORMAT_TMSF;
 CRITICAL_SECTION cs;
 static struct play_info info = { -1, -1 };
 
+void setVolume() {
+	FILE *fptr;
+	// Open a file in read mode
+	fptr = fopen("volumeBGM.txt", "r");
+	if (fptr == NULL){
+		plr_volume(100);
+	}
+	else{
+		// Store the content of the file
+		char strVol[3];
+		// Read the content and store it inside strVol
+		fgets(strVol, 4, fptr);
+		// Close the file
+		fclose(fptr);
+
+		char *endptr;
+		int newVol = strtol(strVol, &endptr, 10);
+
+		if (*endptr != '\0' || endptr == strVol) {
+			//Invalid number, set to default
+			plr_volume(100);
+		}
+		else {
+			//Set Volume to the number in the file
+			plr_volume(newVol);
+		}
+	}
+}
+
 int player_main()
 {
     int first = 0;
@@ -75,6 +108,8 @@ int player_main()
         //set track info
         if (updateTrack)
         {
+			setVolume();
+
 			if (first == info.first)
 			{
 				same_playlist = TRUE;
