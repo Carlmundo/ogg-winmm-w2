@@ -76,7 +76,7 @@ void setVolume() {
 	}
 	else{
 		// Store the content of the file
-		char strVol[3];
+		char strVol[4];
 		// Read the content and store it inside strVol
 		fgets(strVol, 4, fptr);
 		// Close the file
