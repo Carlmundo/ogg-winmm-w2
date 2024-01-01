@@ -108,8 +108,6 @@ int player_main()
         //set track info
         if (updateTrack)
         {
-			setVolume();
-
 			if (first == info.first)
 			{
 				same_playlist = TRUE;
@@ -176,6 +174,97 @@ int player_main()
     return 0;
 }
 
+struct ThreadData {
+    HANDLE directoryHandle;
+    wchar_t* directoryPath;
+    wchar_t* targetFileName;
+};
+
+void MonitorDirectoryThread(void* data) {
+    struct ThreadData* threadData = (struct ThreadData*)data;
+    HANDLE directoryHandle = threadData->directoryHandle;
+    wchar_t* directoryPath = threadData->directoryPath;
+    wchar_t* targetFileName = threadData->targetFileName;
+
+    // Buffer to store the changes
+    const int bufferSize = 4096;
+    BYTE buffer[4096];
+
+    DWORD bytesRead;
+    FILE_NOTIFY_INFORMATION* fileInfo;
+
+    while (ReadDirectoryChangesW(
+        directoryHandle,
+        buffer,
+        bufferSize,
+        FALSE, // Ignore subtree
+        FILE_NOTIFY_CHANGE_LAST_WRITE, // Monitor file write changes
+        &bytesRead,
+        NULL,
+        NULL
+    )) {
+        fileInfo = (FILE_NOTIFY_INFORMATION*)buffer;
+
+        //Make sure that the file that got written to is the file we are monitoring
+        if (wcsncmp(fileInfo->FileName, targetFileName, fileInfo->FileNameLength / sizeof(wchar_t)) != 0)
+            continue;
+
+        do {
+
+            switch (fileInfo->Action) {
+            case FILE_ACTION_MODIFIED:
+                setVolume();
+                break;
+            default:
+                break;
+            }
+
+            // Move to the next entry in the buffer
+            fileInfo = (FILE_NOTIFY_INFORMATION*)((char*)fileInfo + fileInfo->NextEntryOffset);
+
+        } while (fileInfo->NextEntryOffset != 0);
+    }
+
+    // Close the directory handle when the monitoring loop exits
+    CloseHandle(directoryHandle);
+}
+
+void MonitorDirectory(const wchar_t* directoryPath, const wchar_t* targetFileName)
+{
+    // Create a directory handle
+    HANDLE directoryHandle = CreateFileW(
+        directoryPath,
+        FILE_LIST_DIRECTORY,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        NULL
+    );
+
+    if (directoryHandle == INVALID_HANDLE_VALUE) {
+        wprintf(L"Error opening directory: %d\n", GetLastError());
+        return;
+    }
+
+    // Prepare data to pass to the thread
+    struct ThreadData* threadData = (struct ThreadData*)malloc(sizeof(struct ThreadData));
+    if (threadData == NULL) {
+        wprintf(L"Memory allocation failed\n");
+        CloseHandle(directoryHandle);
+        return;
+    }
+    threadData->directoryHandle = directoryHandle;
+    threadData->directoryPath = directoryPath;
+    threadData->targetFileName = targetFileName;
+
+    // Create a thread for monitoring
+    HANDLE threadHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)MonitorDirectoryThread, threadData, 0, NULL);
+
+    //Closes the handle to the thread, however this does not stop the thread
+    CloseHandle(threadHandle);
+}
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     if (fdwReason == DLL_PROCESS_ATTACH)
@@ -229,6 +318,15 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
         }
 
         dprintf("Emulating total of %d CD tracks.\r\n\r\n", numTracks);
+
+        //Gets the current working directory, and creates a path containing it and the volumeBGM.txt file that we want to monitor for changes
+        wchar_t directoryPath[1024];
+        _wgetcwd(directoryPath, sizeof(directoryPath) / sizeof(directoryPath[0]));
+        const wchar_t* targetFileName = L"volumeBGM.txt";
+        MonitorDirectory(directoryPath, targetFileName);
+
+        //Load the volume
+        setVolume();
     }
 
 #ifdef _DEBUG
