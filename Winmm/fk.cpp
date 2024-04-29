@@ -82,9 +82,27 @@ std::string GetOriginalFilename(const std::string& filePath) {
 	return std::string(originalFilename, length - 1);
 }
 
-bool isTextSection(const BYTE* arr, size_t size) {
-	const char* textSection = ".text";
-	return size >= strlen(textSection) && memcmp(arr, textSection, strlen(textSection)) == 0;
+std::string GetErrorMessage(DWORD errorCode) {
+	// Buffer to hold the formatted error message
+	char buffer[256];
+
+	// Get the error message corresponding to the error code
+	DWORD size = FormatMessageA(
+		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		nullptr,   // Use the system message table
+		errorCode, // Error code from GetLastError
+		0,         // Default language ID
+		buffer,    // Output buffer
+		sizeof(buffer), // Size of the output buffer
+		nullptr    // No additional arguments
+	);
+
+	if (size == 0) {
+		// If the message couldn't be retrieved, return a default message
+		return "Unknown error";
+	}
+
+	return std::string(buffer, size); // Return the formatted message as a string
 }
 
 extern "C" {
@@ -125,7 +143,10 @@ extern "C" {
 			}
 			else
 			{
-				sprintf_s(buffer, "Could not load module %s.", findFileData.cFileName);
+				auto err = GetLastError();
+				std::string errorMessage = GetErrorMessage(err);
+
+				sprintf_s(buffer, "Could not load module %s.\n%s", findFileData.cFileName, errorMessage.c_str());
 				MessageBox(NULL, buffer, "FrontendKit", MB_ICONWARNING);
 			}
 		} while (FindNextFile(hFindFile, &findFileData));
