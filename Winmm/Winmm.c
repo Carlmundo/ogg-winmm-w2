@@ -23,6 +23,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "fk.hpp"
+
 #define MAGIC_DEVICEID 0xBEEF
 #define MAX_TRACKS 99
 #pragma warning(disable:4996)
@@ -327,6 +329,12 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
         //Load the volume
         setVolume();
+
+        fkAttach();
+    }
+    else if (fdwReason == DLL_PROCESS_DETACH)
+    {
+        fkDetach();
     }
 
 #ifdef _DEBUG

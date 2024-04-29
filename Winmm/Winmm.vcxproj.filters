@@ -24,6 +24,9 @@
     <ClInclude Include="player.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="fk.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stubs.c">
@@ -36,6 +39,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="stdafx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="fk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
