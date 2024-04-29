@@ -105,54 +105,59 @@ std::string GetErrorMessage(DWORD errorCode) {
 	return std::string(buffer, size); // Return the formatted message as a string
 }
 
+void fkAttachReal()
+{
+	auto moduleName = GetStringFromWindowsApi<TCHAR>([](TCHAR* buffer, int size)
+		{
+			HMODULE module = GetModuleHandle(NULL);
+
+			return GetModuleFileName(module, buffer, size);
+		});
+
+	std::string ogFilename = GetOriginalFilename(moduleName);
+
+	//Abort if it wasn't the frontend that loaded us
+	if (_strcmpi(ogFilename.c_str(), "FRONTEND.EXE") != 0)
+		return;
+
+	// Get executable directory.
+	CHAR buffer[MAX_PATH];
+	GetModuleFileName(NULL, buffer, MAX_PATH);
+	*(strrchr(buffer, '\\') + 1) = '\0';
+
+	// Attempt to load all library files matching the fk*.dll search pattern.
+	lstrcat(buffer, "fk*.dll");
+	WIN32_FIND_DATA findFileData;
+	HANDLE hFindFile = FindFirstFile(buffer, &findFileData);
+	if (hFindFile == INVALID_HANDLE_VALUE)
+		return;
+	do
+	{
+		if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			continue;
+		HMODULE hLibrary = LoadLibraryA(findFileData.cFileName);
+		if (hLibrary)
+		{
+			modules.push_back(hLibrary);
+		}
+		else
+		{
+			auto err = GetLastError();
+			std::string errorMessage = GetErrorMessage(err);
+
+			sprintf_s(buffer, "Could not load module %s.\n%s", findFileData.cFileName, errorMessage.c_str());
+			MessageBox(NULL, buffer, "FrontendKit", MB_ICONWARNING);
+		}
+	} while (FindNextFile(hFindFile, &findFileData));
+	FindClose(hFindFile);
+
+	attached = true;
+}
+
 extern "C" {
 	void fkAttach()
 	{
-		auto moduleName = GetStringFromWindowsApi<TCHAR>([](TCHAR* buffer, int size)
-			{
-				HMODULE module = GetModuleHandle(NULL);
-
-				return GetModuleFileName(module, buffer, size);
-			});
-
-		std::string ogFilename = GetOriginalFilename(moduleName);
-
-		//Abort if it wasn't the frontend that loaded us
-		if (_strcmpi(ogFilename.c_str(), "FRONTEND.EXE") != 0)
-			return;
-
-		// Get executable directory.
-		CHAR buffer[MAX_PATH];
-		GetModuleFileName(NULL, buffer, MAX_PATH);
-		*(strrchr(buffer, '\\') + 1) = '\0';
-
-		// Attempt to load all library files matching the fk*.dll search pattern.
-		lstrcat(buffer, "fk*.dll");
-		WIN32_FIND_DATA findFileData;
-		HANDLE hFindFile = FindFirstFile(buffer, &findFileData);
-		if (hFindFile == INVALID_HANDLE_VALUE)
-			return;
-		do
-		{
-			if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-				continue;
-			HMODULE hLibrary = LoadLibrary(findFileData.cFileName);
-			if (hLibrary)
-			{
-				modules.push_back(hLibrary);
-			}
-			else
-			{
-				auto err = GetLastError();
-				std::string errorMessage = GetErrorMessage(err);
-
-				sprintf_s(buffer, "Could not load module %s.\n%s", findFileData.cFileName, errorMessage.c_str());
-				MessageBox(NULL, buffer, "FrontendKit", MB_ICONWARNING);
-			}
-		} while (FindNextFile(hFindFile, &findFileData));
-		FindClose(hFindFile);
-
-		attached = true;
+		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)fkAttachReal, NULL, 0, NULL);
 	}
 
 
